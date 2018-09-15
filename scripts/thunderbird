@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -e
+
+CONTAINER_HOME_DIR=$HOME/container_homes/thunderbird
+
+if [[ ! -d $CONTAINER_HOME_DIR ]]; then
+	mkdir -p $CONTAINER_HOME_DIR
+fi
+
+if [[ -n "$(docker ps -qaf 'name=thunderbird')" ]]; then
+	docker restart thunderbird
+else
+	USER_UID=$(id -u)
+	USER_GID=$(id -g)
+	xhost "si:localuser:${USER}"
+
+	[[ ${DBUS_SESSION_BUS_ADDRESS} =~ 'unix:path'\
+		 && -S ${DBUS_SESSION_BUS_ADDRESS#*=} ]]\
+		 && DBUS=${DBUS_SESSION_BUS_ADDRESS#*=}
+
+	docker build -t thundebird . && \
+	docker run --rm --name thunderbird \
+		-e "USER_UID=${USER_UID}" \
+		-e "USER_GID=${USER_GID}" \
+		-e "DISPLAY=unix${DISPLAY}" \
+		${DBUS:+-v "${DBUS}:/run/dbus"} \
+		${DBUS:+-e "DBUS_SESSION_BUS_ADDRESS=/run/dbus"} \
+		-v "${CONTAINER_HOME_DIR}:/home/thunderbird" \
+		-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+		-v /etc/localtime:/etc/localtime:ro \
+		-v "/run/user/${USER_UID}/pulse:/run/pulse:ro" \
+		thunderbird
+fi
